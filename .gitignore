@@ -1,0 +1,31 @@
+# PlatformIO
+.pio/
+
+# Python virtual environments
+.venv/
+.venv-micropython/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Project documentation and experimental results
+docs/
+telemetry/
+arduino_ethernet/telemetry/
+
+# Local secrets
+micropython/secrets/wifi_secrets.py
+
+# Downloaded firmware binaries
+firmware/*.bin
+
+# Temporary files
+*.log
+*.tmp
+*~
+.DS_Store
