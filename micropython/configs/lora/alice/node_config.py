@@ -6,10 +6,11 @@ CONFIG = dict(ALICE_BASE)
 CONFIG.update({
     "transport": "lora",
     "control_mode": "usb",
+    "startup_message": "At",
 
     # Mayor intervalo para evitar colisiones y permitir
     # cifrado, recepción y decodificación.
-    "tx_interval_ms": 1500,
+    "tx_interval_ms": 3000,
     "initial_tx_delay_ms": 500,
 
     "lora_spi_id": 2,
@@ -18,7 +19,7 @@ CONFIG.update({
     "lora_miso_pin": 19,
     "lora_cs_pin": 5,
     "lora_reset_pin": 14,
-    "lora_dio0_pin": 26,
+    "lora_dio0_pin": 4,
 
     "lora_frequency": 433000000,
     "lora_tx_power": 10,

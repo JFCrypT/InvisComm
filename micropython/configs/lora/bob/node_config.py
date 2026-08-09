@@ -6,18 +6,19 @@ CONFIG = dict(BOB_BASE)
 CONFIG.update({
     "transport": "lora",
     "control_mode": "usb",
+    "startup_message": "Re",
 
-    "tx_interval_ms": 1500,
+    "tx_interval_ms": 3000,
 
     # Bob transmite desplazado 750 ms respecto de Alice.
-    "initial_tx_delay_ms": 1250,
+    "initial_tx_delay_ms": 2000,
 
     "lora_spi_id": 2,
     "lora_sck_pin": 18,
     "lora_mosi_pin": 23,
     "lora_cs_pin": 5,
     "lora_reset_pin": 14,
-    "lora_dio0_pin": 26,
+    "lora_dio0_pin": 4,
 
     "lora_frequency": 433000000,
     "lora_tx_power": 10,

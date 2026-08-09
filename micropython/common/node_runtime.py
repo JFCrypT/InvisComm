@@ -404,6 +404,16 @@ class InvisCommNodeRuntime:
     def run_forever(self):
         self._running = True
 
+        # Rearma la planificación TX respecto del comienzo real
+        # del runtime. El delay de sincronización de sesión ocurre
+        # después de construir el nodo, por lo que el deadline
+        # calculado en __init__ puede haber vencido antes de START.
+        self._last_tx_ms = time.ticks_ms()
+        self._next_tx_ms = time.ticks_add(
+            self._last_tx_ms,
+            self.initial_tx_delay_ms,
+        )
+
         print(
             "LOG,{},{},Runtime iniciado con transporte {}".format(
                 self.name,
