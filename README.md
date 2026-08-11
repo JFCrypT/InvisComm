@@ -57,6 +57,7 @@ El núcleo de InvisComm se mantiene desacoplado del transporte. Alice y Bob mant
   - 2 × módulos Ra-02/SX1278.
   - 2 × antenas compatibles con la frecuencia de los módulos.
   - cables Dupont o protoboard.
+  - fuente estable de 3,3 V para cada módulo LoRa. En la validación experimental se utilizaron placas Arduino únicamente como fuente de 3,3 V para los Ra-02, con masa común entre Arduino, ESP32 y LoRa.
 - Red Wi-Fi local para la variante UDP.
 
 #### Arduino Ethernet
@@ -721,28 +722,69 @@ SESIÓN: PASS
 > No transmitir con un módulo LoRa sin antena conectada. Puede dañarse la etapa de RF.
 
 > [!IMPORTANT]
-> Confirmar la frecuencia impresa en el módulo. La configuración actual usa `433000000` Hz.
+> Confirmar la frecuencia impresa en el módulo. La configuración validada utiliza `433000000` Hz.
 
-### 10.2 Cableado Ra-02/SX1278
+> [!IMPORTANT]
+> El Ra-02/SX1278 trabaja a 3,3 V. No debe alimentarse con 5 V. En el montaje validado cada módulo LoRa se alimentó desde una fuente externa de 3,3 V provista por una placa Arduino utilizada únicamente como fuente de alimentación. El GND del Arduino, el GND del ESP32 y el GND del Ra-02 deben estar unidos.
 
-Configuración usada por el código:
+### 10.2 Cableado ESP32 + Ra-02/SX1278 validado
+
+La misma conexión se utiliza en Alice y Bob:
 
 | Ra-02/SX1278 | ESP32 | Función |
 |---|---:|---|
-| VCC | 3V3 | Alimentación 3,3 V |
-| GND | GND | Masa |
+| 3.3 | Fuente externa 3,3 V | Alimentación del módulo LoRa |
+| GND | GND común con ESP32 y fuente externa | Referencia común |
 | SCK | GPIO 18 | SPI clock |
 | MISO | GPIO 19 | SPI MISO |
 | MOSI | GPIO 23 | SPI MOSI |
 | NSS/CS | GPIO 5 | Chip select |
-| RESET | GPIO 14 | Reset del radio |
-| DIO0 | GPIO 26 | Interrupción RX/TX |
+| DIO0 | GPIO 4 | Señal digital del radio |
+| RST | Sin conectar | No utilizado en el montaje validado |
 
-La misma conexión se repite en Alice y Bob.
+La conexión de alimentación usada experimentalmente fue:
 
-No alimentar el Ra-02 con 5 V.
+```text
+Fuente externa 3,3 V ───────────── Ra-02 3.3
 
-### 10.3 Parámetros LoRa actuales
+Fuente externa GND ─────┬───────── Ra-02 GND
+                        │
+ESP32 GND ──────────────┘
+```
+
+Las señales SPI y de control quedan:
+
+```text
+ESP32 GPIO18 ─────────── Ra-02 SCK
+ESP32 GPIO19 ─────────── Ra-02 MISO
+ESP32 GPIO23 ─────────── Ra-02 MOSI
+ESP32 GPIO5  ─────────── Ra-02 NSS
+ESP32 GPIO4  ─────────── Ra-02 DIO0
+
+Ra-02 RST ────────────── SIN CONECTAR
+```
+
+> [!NOTE]
+> En la placa ESP32 utilizada durante la validación, orientada con el conector USB hacia abajo, se utilizó como GND el pin del lado derecho ubicado primero desde arriba. La identificación eléctrica por nombre de pin tiene prioridad sobre la posición física, ya que existen distintas placas de desarrollo basadas en ESP-WROOM-32.
+
+### 10.3 Comprobación directa del SX1278
+
+Antes de ejecutar InvisComm se verificó la comunicación SPI leyendo `REG_VERSION` en ambos radios. El valor obtenido fue:
+
+```text
+LoRa A REG_VERSION = 0x12
+LoRa B REG_VERSION = 0x12
+```
+
+También se realizó una transmisión RF directa entre ambos nodos:
+
+```text
+BOB RECIBIO: b'INVISCOMM-LORA-TEST'
+```
+
+Estas pruebas validan el enlace ESP32 ↔ SX1278 por SPI y la comunicación LoRa física entre ambos módulos.
+
+### 10.4 Parámetros LoRa validados
 
 ```text
 Frecuencia:       433 MHz
@@ -755,11 +797,54 @@ Sync word:        0x42
 CRC de radio:     habilitado
 ```
 
-Alice transmite inicialmente a los 500 ms y Bob a los 1250 ms para reducir colisiones.
+### 10.5 Reducción de mensaje y cadencia para LoRa
 
-### 10.4 Desplegar LoRa
+Para adaptar InvisComm al comportamiento half-duplex del enlace LoRa se aplicaron únicamente ajustes de carga y temporización específicos del transporte, sin modificar la lógica criptográfica ni la validación estricta de posiciones.
 
-Con los módulos ya conectados y las antenas instaladas:
+Los mensajes iniciales se redujeron a los dos primeros caracteres:
+
+```text
+Alice: "At"
+Bob:   "Re"
+```
+
+La cadencia de transmisión se redujo respecto de la configuración inicial:
+
+```text
+tx_interval_ms = 3000
+```
+
+Los inicios de transmisión se desfasaron para evitar que ambos SX1278 transmitan simultáneamente:
+
+```text
+Alice initial_tx_delay_ms = 500
+Bob   initial_tx_delay_ms = 2000
+```
+
+Por lo tanto, la secuencia temporal ideal queda aproximadamente:
+
+```text
+START
+ +0.5 s  Alice TX
+ +2.0 s  Bob TX
+ +3.5 s  Alice TX
+ +5.0 s  Bob TX
+ ...
+```
+
+El runtime rearma `_next_tx_ms` al comenzar realmente `run_forever()`. Esto hace que `initial_tx_delay_ms` se mida desde el comienzo efectivo de la sesión y evita que el retardo de sincronización previo al `START` haga vencer anticipadamente los deadlines de transmisión.
+
+Se mantiene:
+
+```text
+strict_position = True
+```
+
+Una pérdida o desorden continúa siendo considerada una condición inválida de sesión. No se agregaron ACK, retransmisiones ni mecanismos de confiabilidad ajenos a InvisComm.
+
+### 10.6 Desplegar LoRa
+
+Con los módulos conectados y las antenas instaladas:
 
 ```bash
 cd ~/Documents/Proyectos/InvisComm
@@ -769,7 +854,7 @@ bash scripts/deploy_transport.sh lora \
   2>&1 | tee ~/Downloads/salida.txt
 ```
 
-### 10.5 Ejecutar LoRa
+### 10.7 Ejecutar LoRa
 
 ```bash
 bash scripts/run_experiment.sh lora 120
@@ -783,7 +868,26 @@ Esperando READY de Alice y Bob...
 
 presionar `EN` en ambas placas.
 
-La captura LoRa dura normalmente más que UART o UDP porque el intervalo configurado es de 1500 ms.
+La captura validada de 120 segundos produjo:
+
+```text
+Registros: 79
+Direcciones: ['A-->B', 'B-->A']
+Tramas Info: 4
+Errores runtime: 0
+Tracebacks: 0
+CAPTURA: PASS
+SESIÓN: PASS
+```
+
+El `telemetria.csv` validado contiene 79 registros:
+
+```text
+A-->B : 40
+B-->A : 39
+Info  : 4
+Noise : 75
+```
 
 La salida `RX` incluye metadatos del radio:
 
@@ -792,7 +896,6 @@ RX,node,position,coordinate,character,decode_us,rssi,snr,crc_valid
 ```
 
 Estos datos quedan preservados en `serial_raw.log`.
-
 ---
 
 ## 11. Arduino Uno + UDP sobre Ethernet
@@ -1296,12 +1399,21 @@ SX127x no detectado
 
 revisar:
 
-- alimentación a 3,3 V;
-- GND común;
-- SCK, MISO y MOSI;
-- CS/NSS;
-- RESET;
+- alimentación estable a 3,3 V;
+- GND común entre fuente externa, ESP32 y Ra-02;
+- SCK → GPIO 18;
+- MISO → GPIO 19;
+- MOSI → GPIO 23;
+- NSS/CS → GPIO 5;
+- DIO0 → GPIO 4;
+- `RST` debe permanecer sin conectar en el montaje validado;
 - módulo y frecuencia correctos.
+
+La comprobación directa esperada para un SX1278 es:
+
+```text
+REG_VERSION = 0x12
+```
 
 ### Pérdida o desorden
 
@@ -1384,6 +1496,11 @@ Validado hasta el momento:
 - ejecución real UDP/Wi-Fi.
 - análisis estadístico de una captura UDP/Wi-Fi.
 - detección experimental de pérdida y desincronización sobre UDP/Wi-Fi.
+- comunicación SPI validada con ambos Ra-02/SX1278 (`REG_VERSION = 0x12`).
+- transmisión RF directa validada entre ambos módulos LoRa.
+- sesión InvisComm bidireccional LoRa validada durante 120 s.
+- captura LoRa validada con `79` registros, ambas direcciones, `4` tramas `Info`, `0` errores runtime y `0` tracebacks.
+- generación de `telemetria.csv` LoRa compatible con la notebook de análisis.
 
 ### Arduino Uno + Ethernet
 
@@ -1402,7 +1519,7 @@ Pendiente de validación física completa:
 - sesión InvisComm UDP/Ethernet entre ambos Arduino Uno;
 - generación y análisis de telemetría Ethernet;
 - UART entre ambos ESP32;
-- LoRa con ambos módulos Ra-02/SX1278;
+- análisis de la captura LoRa con `InvisComm_02_Analisis.ipynb`;
 - análisis comparativo final entre UDP/Wi-Fi, UDP/Ethernet, UART y LoRa.
 
 ---
