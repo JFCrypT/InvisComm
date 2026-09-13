@@ -1605,7 +1605,7 @@ cp \
 
 ## 18. Autores
 
-**Vladyslav Solovei**  
+**Anónimo**  
 Autor intelectual de InvisComm y de la propuesta conceptual original del canal.
 
 **Jorge Kamlofsky**  
